@@ -31,3 +31,6 @@ cabal.project.local~
 *.swp
 *.bak
 *.ghc.environment.*
+
+# vscode
+./.vscode/
