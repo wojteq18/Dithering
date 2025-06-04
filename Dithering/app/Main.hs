@@ -7,8 +7,8 @@ main :: IO ()
 main = do
     args <- getArgs
     case args of
-        [filePath] -> do
-            result <- readImage filePath --readImage :: FilePath -> IO (Either String DynamicImage) - lewa strona to błąd, prawa strona to obraz
+        [inputPath, outputPath] -> do
+            result <- readImage inputPath --readImage :: FilePath -> IO (Either String DynamicImage) - lewa strona to błąd, prawa strona to obraz
 
             case result of
                 Left err -> do
@@ -19,10 +19,13 @@ main = do
                     putStrLn $ "Szerokość: " ++ show w ++ ", Wysokość: " ++ show h
                     let x = 10
                     let y = 10
-                    let pixelIndex = (y * w + x) * 3 -- 3 bo RGB
+                    let pixelIndex = (y * w + x) * 3 -- (y * szerokość + x) * 3, bo każdy piksel ma 3 wartości (R, G, B)
                     let r = dat V.! pixelIndex
                     let g = dat V.! (pixelIndex + 1)
                     let b = dat V.! (pixelIndex + 2)
                     putStrLn $ "Kolor piksela na pozycji (10, 10): R=" ++ show r ++ ", G=" ++ show g ++ ", B=" ++ show b
+                    --tutaj moment zapisu do outputu
+                    let newImage = Image w h dat :: Image PixelRGB8 
+                    writePng outputPath newImage -- zapis obrazu do pliku PNG
         _ -> do
             exitFailure
