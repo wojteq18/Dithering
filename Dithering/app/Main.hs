@@ -3,11 +3,28 @@ import Codec.Picture.Types
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
 import qualified Data.Vector.Storable as V
+import Data.Bits ((.&.), shiftR, shiftL)
+
+
+-- Ogranicz wartość kanału do n bitów
+reduceBits :: Int -> Pixel8 -> Pixel8
+reduceBits n x =
+    let shift = 8 - n
+        mask = (0xFF `shiftR` shift) `shiftL` shift -- Tworzy maskę z n najważniejszymi bitami i zeruje resztę, ograniczając wartość kanału do n bitów
+    in (x .&. mask)
+
+-- Przetwórz obraz, ograniczając liczbę bitów na kanał
+reduceImageBits :: Int -> Image PixelRGB8 -> Image PixelRGB8
+reduceImageBits n img = pixelMap reducePixel img --pixelMap aplikuje transformację do wszystkich pixeli obrazu
+    where
+        reducePixel (PixelRGB8 r g b) = PixelRGB8 (reduceBits n r) (reduceBits n g) (reduceBits n b)
+
 main :: IO ()
 main = do
     args <- getArgs
     case args of
-        [inputPath, outputPath] -> do
+        [inputPath, outputPath, bitsStr] -> do
+            let nBits = read bitsStr :: Int --zmiana na int
             result <- readImage inputPath --readImage :: FilePath -> IO (Either String DynamicImage) - lewa strona to błąd, prawa strona to obraz
 
             case result of
@@ -15,7 +32,9 @@ main = do
                     putStrLn $ "Błąd przy wczytywaniu obrazu: " ++ err
                     exitFailure
                 Right img -> do
-                    let Image w h dat = convertRGB8 img --dat :: Vector Word8 - dane RGB po kolei: R, G, B, R, G ..., długość 3 * w * h
+                    let rgbImg = convertRGB8 img
+                    let reducedImg = reduceImageBits nBits rgbImg -- nBits bitow na kanał
+                    let Image w h dat = reducedImg --dat :: Vector Word8 - dane RGB po kolei: R, G, B, R, G ..., długość 3 * w * h
                     putStrLn $ "Szerokość: " ++ show w ++ ", Wysokość: " ++ show h
                     let x = 10
                     let y = 10
