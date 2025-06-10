@@ -6,6 +6,7 @@ import Control.Monad           (forM_, when)
 import Control.Monad.ST        (runST)
 import qualified Data.Vector.Storable.Mutable as M
 import Data.List (minimumBy)
+import Data.Word (Word8)
 
 type PalletteFunc = Int -> (Double, Double, Double) -> (Double, Double, Double)
 
@@ -18,24 +19,12 @@ clamp x
     | x > 255   = 255
     | otherwise = x
 
-pixelToDouble :: PixelRGB8 -> (Double, Double, Double) --zamiana piksela na trojkę wartości RGB jako Double
-pixelToDouble (PixelRGB8 r g b) = (fromIntegral r, fromIntegral g, fromIntegral b)
-
-doubleToPixel :: (Double, Double, Double) -> PixelRGB8 --odwrotnie
-doubleToPixel (r, g, b) = PixelRGB8 (toWord8 r) (toWord8 g) (toWord8 b)
-    where toWord8 = fromIntegral . round . clamp
-
 quantizeChannel :: Int -> Double -> Double --zmiana wartości kanału RGB na wartość zredukowaną do n bitów
 quantizeChannel n value =
-    let levels = 2 ^ n --liczba poziomów szarości
+    let levels = (2^n) :: Int --liczba poziomów szarości
         step = 255 / fromIntegral (levels - 1) --krok między poziomami
-        idx = round (value / step) --indeks poziomu
+        idx = round (value / step) :: Int --indeks poziomu
     in clamp (fromIntegral idx * step) --zwróć wartość zredukowaną do n bitów
-
-quantizePixel :: Int -> (Double, Double, Double) -> (Double, Double, Double) --zastosuj redukcję do każdego kanału RGB
-quantizePixel n (r, g, b) =
-    (quantizeChannel n r, quantizeChannel n g, quantizeChannel n b)
-
 
 quantizeVector :: Int -> V.Vector Double -> V.Vector Double --zredukuj caly wektor wartości RGB do n bitów
 quantizeVector nBits = V.map (quantizeChannel nBits)
@@ -43,7 +32,7 @@ quantizeVector nBits = V.map (quantizeChannel nBits)
 -- Generowanie palety
 generatePalette :: Int -> [(Double, Double, Double)]
 generatePalette n =
-  let levels = [0, 255 / fromIntegral (2^n - 1) .. 255]
+  let levels = [0, 255 / ((2^n) - 1) .. 255]
   in [(r,g,b) | r <- levels, g <- levels, b <- levels]
 
 -- Manhattan
@@ -102,9 +91,9 @@ ditherVector paletteFunc nBits width height vec = runST $ do
         prop 1   1 (1/16)
     V.freeze mv
 
-vectorToImage :: Int -> Int -> V.Vector Double -> Image PixelRGB8 --konwersja wektora wartości RGB do obrazu
+vectorToImage :: Int -> Int -> V.Vector Double -> Image PixelRGB8
 vectorToImage width height vecD =
-    let vecW8 = V.map (fromIntegral . round . clamp) vecD
+    let vecW8 = V.map (\x -> fromIntegral (round (clamp x) :: Integer) :: Word8) vecD
     in Image width height vecW8
 
 main :: IO ()
