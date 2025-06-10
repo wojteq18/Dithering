@@ -7,8 +7,6 @@ import Control.Monad           (forM_, when)
 import Control.Monad.ST        (runST, ST)
 import qualified Data.Vector.Storable.Mutable as M
 
-type PaletteFunc = Int -> Double -> Double
-
 getIndex :: Int -> Int -> Int -> Int -> Int --zwroc indeks piksela (x,y) w wektorze pixeli
 getIndex x y width c = (y * width + x) * 3 + c -- (y * szerokość + x) * 3, bo każdy piksel ma 3 wartości (R, G, B) c = 0, 1 lub 2 wybiera kanal RGB
 
@@ -40,15 +38,15 @@ quantizePixel n (r, g, b) =
 quantizeVector :: Int -> V.Vector Double -> V.Vector Double --zredukuj caly wektor wartości RGB do n bitów
 quantizeVector nBits = V.map (quantizeChannel nBits)
 
-ditherVector :: PaletteFunc -> Int -> Int -> Int -> V.Vector Double -> V.Vector Double -- floyd-steinberg dithering
-ditherVector paletteFunc nBits width height vec = runST $ do
+ditherVector :: Int -> Int -> Int -> V.Vector Double -> V.Vector Double -- floyd-steinberg dithering
+ditherVector nBits width height vec = runST $ do
     mv <- V.thaw vec
     forM_ [0 .. height - 1] $ \y ->
       forM_ [0 .. width  - 1] $ \x ->
         forM_ [0..2] $ \c -> do
           let idx = getIndex width x y c
           old <- M.read mv idx
-          let new = paletteFunc nBits old
+          let new = quantizeChannel nBits old
           M.write mv idx new
           let err = old - new
               prop dx dy w =
@@ -89,7 +87,7 @@ main = do
             quantImg = vectorToImage width height quantD
         writePng (outRoot ++ "_quant.png") quantImg
 
-        let ditherD  = ditherVector quantizeChannel nBits width height rawD
+        let ditherD  = ditherVector nBits width height rawD
             ditherImg = vectorToImage width height ditherD
         writePng (outRoot ++ "_dither.png") ditherImg
 
