@@ -36,6 +36,7 @@ data AppState = AppState
     , currentNBits   :: Int
     }
 
+-- Initial state is unchanged.
 initialState :: AppState
 initialState = AppState
     { originalImage  = Nothing
@@ -51,10 +52,33 @@ main = do
 
     win <- new Gtk.Window [#title := "Haskell Dithering"]; void $ on win #destroy Gtk.mainQuit; #resize win 800 600
     grid <- new Gtk.Grid [#columnSpacing := 10, #rowSpacing := 10, #margin := 10]
-    imgDisplay <- new Gtk.Image []; #setHexpand imgDisplay True; #setVexpand imgDisplay True; Gtk.gridAttach grid imgDisplay 0 0 1 10
+    
+    -- ########## START OF THE CHANGE ##########
+
+    -- 1. Create a new ScrolledWindow.
+    --    This widget will hold our image and provide scrollbars automatically.
+    scrolledWin <- new Gtk.ScrolledWindow []
+    --    Make the ScrolledWindow expand to fill the available space.
+    #setHexpand scrolledWin True
+    #setVexpand scrolledWin True
+    --    Give it a nice border.
+    #setShadowType scrolledWin Gtk.ShadowTypeIn
+
+    -- 2. Create the Image widget as before.
+    --    Note that we no longer tell the Image to expand. It will now have its natural
+    --    size, and the ScrolledWindow will manage its visibility.
+    imgDisplay <- new Gtk.Image []
+
+    -- 3. Place the Image INSIDE the ScrolledWindow.
+    #add scrolledWin imgDisplay
+
+    -- 4. Place the ScrolledWindow into the grid (where the image used to go).
+    Gtk.gridAttach grid scrolledWin 0 0 1 10
+
+    -- ########## END OF THE CHANGE ##########
+
     controlsBox <- new Gtk.Box [#orientation := Gtk.OrientationVertical, #spacing := 15]; #setHexpand controlsBox False; Gtk.gridAttach grid controlsBox 1 0 1 1
     
-    -- UI controls are mostly the same
     fileBtn <- new Gtk.FileChooserButton [#title := "Choose an Image", #action := Gtk.FileChooserActionOpen]; Gtk.boxPackStart controlsBox fileBtn False False 5
     algoLabel <- new Gtk.Label [#label := "Algorithm"]; Gtk.boxPackStart controlsBox algoLabel False False 0
     algoCombo <- new Gtk.ComboBoxText []; Gtk.comboBoxTextAppendText algoCombo "FloydSteinberg"; Gtk.comboBoxTextAppendText algoCombo "Atkinson"; Gtk.comboBoxTextAppendText algoCombo "Ordered"; Gtk.comboBoxTextAppendText algoCombo "SimpleQuantization"; #setActive algoCombo 0; Gtk.boxPackStart controlsBox algoCombo False False 5
@@ -63,25 +87,22 @@ main = do
     bitsLabel <- new Gtk.Label [#label := "Bits per channel (1-8)"]; Gtk.boxPackStart controlsBox bitsLabel False False 0
     bitsScale <- new Gtk.Scale [#orientation := Gtk.OrientationHorizontal, #drawValue := True]; #setRange bitsScale 1 8; #setValue bitsScale 3; #setDigits bitsScale 0; Gtk.boxPackStart controlsBox bitsScale False False 5
     
-    -- NEW: The "Dither!" button. It starts disabled.
     runBtn <- new Gtk.Button [#label := "Dither!", #sensitive := False]
     Gtk.boxPackStart controlsBox runBtn False False 10
-
     saveBtn <- new Gtk.Button [#label := "Save Dithered Image..."]; Gtk.boxPackStart controlsBox saveBtn False False 10
     
     #add win grid
     
     displayedImage <- newTVarIO Nothing :: IO (TVar (Maybe ImageRGB))
 
-    -- CHANGED: We now have two separate actions.
-    
-    -- This action runs the dithering algorithm based on the current state.
+    -- The rest of the logic is unchanged. It will all work correctly
+    -- with the new ScrolledWindow setup.
     let runDithering = do
           state <- readTVarIO appState
           case originalImage state of
-            Nothing -> return () -- This shouldn't happen if the button is disabled correctly.
+            Nothing -> return ()
             Just img -> void . forkIO $ do
-              putStrLn "Dithering process started..." -- For debugging
+              putStrLn "Dithering process started..."
               let (w, h) = getImageDimensions img
                   rawD   = imageToDoubleVector img
               let ditheredD = applyDithering (currentAlgo state) (currentMetric state) (currentNBits state) w h rawD
@@ -90,16 +111,14 @@ main = do
               atomically $ writeTVar displayedImage (Just resultImg)
               void $ GLib.idleAdd GLib.PRIORITY_DEFAULT_IDLE $ do
                 #setFromPixbuf imgDisplay (Just pixbuf)
-                putStrLn "Dithering process finished, display updated." -- For debugging
+                putStrLn "Dithering process finished, display updated."
                 return False
 
-    -- This action displays the original image and enables the "Dither!" button.
     let displayOriginalImage img = do
           pixbuf <- imageRGBToPixbuf img
           #setFromPixbuf imgDisplay (Just pixbuf)
           #setSensitive runBtn True
 
-    -- CHANGED: The file button now ONLY loads and displays the original image.
     void $ on fileBtn #selectionChanged $ do
         mFile <- #getFilename fileBtn
         case mFile of
@@ -110,15 +129,11 @@ main = do
                     Left err   -> putStrLn $ "Error loading image: " ++ err
                     Right dImg -> do
                         let img = convertRGB8 dImg
-                        -- Put the original image in the state
                         atomically $ modifyTVar' appState (\s -> s { originalImage = Just img })
-                        -- Immediately display it
                         displayOriginalImage img
     
-    -- NEW: Connect the "Dither!" button to our runDithering action.
     void $ on runBtn #clicked runDithering
 
-    -- The other event handlers just update the state. They don't trigger dithering directly.
     void $ on algoCombo #changed $ do
         mText <- Gtk.comboBoxTextGetActiveText algoCombo
         case mText of
@@ -139,8 +154,6 @@ main = do
         val <- round <$> #getValue bitsScale
         atomically $ modifyTVar' appState (\s -> s { currentNBits = val })
 
-    -- Save button logic is unchanged and now works correctly, as it saves the
-    -- dithered image stored in `displayedImage`.
     void $ on saveBtn #clicked $ do
         mImg <- readTVarIO displayedImage
         when (isJust mImg) $ do
