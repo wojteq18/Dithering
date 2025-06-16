@@ -51,6 +51,7 @@ quantizeChannelOrdered nBits originalValue bayerVal matrixMaxValPlusOne =
         quantizedValue = fromIntegral levelIndex * step
     in clamp quantizedValue 
 
+orderedDitherVector :: [[Int]] -> Int -> Int -> Int -> V.Vector Double -> V.Vector Double
 orderedDitherVector bayerMatrix nBits width height vec = runST $ do
     mv <- V.thaw vec 
 
