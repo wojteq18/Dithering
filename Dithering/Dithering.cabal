@@ -38,7 +38,8 @@ executable dithering-gui
         haskell-gi-base,
         JuicyPixels,
         stm,
-        vector
+        vector,
+        gi-gdk
     default-language: Haskell2010
 
 -- This is the CLI executable
